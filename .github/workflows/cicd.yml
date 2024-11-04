@@ -1,0 +1,64 @@
+name: Portal RMS
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Create prod.env file for Docker container
+        run: |
+          echo "DB_HOST=${{ secrets.DB_HOST }}" >> prod.env
+          echo "DB_USER=${{ secrets.DB_USERNAME }}" >> prod.env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> prod.env
+          echo "DB_NAME=${{ secrets.DB_NAME }}" >> prod.env
+          echo "DB_PORT=${{ secrets.DB_PORT }}" >> prod.env
+          echo "JWT_SECRET=${{ secrets.DB_AUTHKEY }}" >> prod.env
+          echo "DB_SSLMODE=${{ secrets.DB_SSLMODE }}" >> prod.env
+
+      - name: Build the Docker image
+        run: |
+          docker build -t vijayragunathgs/portalrms:latest .
+
+      - name: Push the Docker image
+        run: |
+          docker push vijayragunathgs/portalrms:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: SSH to EC2 and deploy
+        env:
+          EC2_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_USER: ubuntu  # Change if your user is different
+          EC2_IP: ${{ secrets.EC2_PUBLIC_IP }}
+        run: |
+          echo "$EC2_KEY" > ec2_key.pem
+          chmod 600 ec2_key.pem
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem $EC2_USER@$EC2_IP << 'EOF'
+            # Pull the latest Docker image
+            sudo docker pull vijayragunathgs/portalrms:latest
+            
+            # Remove any existing container
+            sudo docker rm -f portalrms-container || true
+            
+            # Run the Docker container
+            sudo docker run -d -p 8080:8080 --name portalrms-container vijayragunathgs/portalrms:latest
+          EOF
