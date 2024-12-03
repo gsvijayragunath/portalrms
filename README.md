@@ -12,7 +12,7 @@ Service used for comapnies to manage the Job Openings and Applications (JOB PORT
 ## Setup
 ```
 git clone
-cd Recruitment-management-system-
+cd portalrms
  ```
 
 One time db setup
